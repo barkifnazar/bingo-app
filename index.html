@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bingo Scorebord Pro</title>
+    <title>Bingo Scorebord - Presentatie Modus</title>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #282828;
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #1a1a1a;
             color: white;
             margin: 0;
             display: flex;
@@ -18,7 +18,7 @@
             overflow: hidden;
         }
 
-        /* Het speelveld */
+        /* Container voor het bord */
         .bingo-board {
             display: grid;
             grid-template-rows: repeat(5, 1fr);
@@ -31,7 +31,6 @@
             display: grid;
             grid-template-columns: 100px repeat(15, 1fr);
             gap: 8px;
-            align-items: center;
         }
 
         .letter {
@@ -39,82 +38,92 @@
             font-weight: 900;
             text-align: center;
             color: #ffcc00;
+            line-height: 1.2;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
         }
 
         .number-btn {
             height: 100%;
-            border: none;
+            border: 4px solid transparent;
             border-radius: 10px;
             font-size: 2rem;
             font-weight: bold;
             cursor: pointer;
-            background-color: #d3d3d3; /* Lichtgrijs */
+            background-color: #d3d3d3;
             color: #333;
-            transition: all 0.2s ease;
+            transition: all 0.1s ease;
+            outline: none;
         }
 
-        /* De meest recent geklikte knop (Oranje) */
+        /* Focus & Kleuren */
+        .number-btn:focus {
+            border-color: #00aaff;
+            box-shadow: 0 0 20px #00aaff;
+            transform: scale(1.05);
+            z-index: 20;
+        }
+
         .number-btn.active-now {
             background-color: #ff8c00 !important;
             color: white;
-            transform: scale(1.1);
-            box-shadow: 0 0 20px #ff8c00;
-            z-index: 10;
+            box-shadow: 0 0 25px #ff8c00;
         }
 
-        /* Eerder geklikte knoppen (Geel) */
         .number-btn.active-past {
             background-color: #ffd700 !important;
             color: #333;
         }
 
-        /* Informatiebalk onderaan */
+        /* Bedieningsbalk */
         .controls {
             width: 95vw;
-            margin-top: 30px;
+            margin-top: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 20px;
+            padding: 15px;
             background: #333;
             border-radius: 15px;
         }
 
-        .counter {
-            font-size: 2rem;
-            font-weight: bold;
+        .counter { font-size: 1.8rem; font-weight: bold; color: #ffcc00; }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
         }
 
-        #reset-btn {
-            padding: 15px 30px;
-            font-size: 1.2rem;
+        .admin-btn {
+            padding: 10px 20px;
+            font-size: 1rem;
             font-weight: bold;
-            background-color: #e74c3c;
-            color: white;
             border: none;
             border-radius: 8px;
             cursor: pointer;
-            transition: background 0.3s;
+            color: white;
+            transition: opacity 0.2s;
         }
 
-        #reset-btn:hover {
-            background-color: #c0392b;
-        }
-
-        #reset-btn:active {
-            transform: scale(0.95);
-        }
+        #fullscreen-btn { background-color: #2ecc71; }
+        #reset-btn { background-color: #e74c3c; }
+        .admin-btn:hover { opacity: 0.8; }
     </style>
 </head>
 <body>
 
-<div class="bingo-board" id="board">
-    </div>
+<div class="bingo-board" id="board"></div>
 
 <div class="controls">
-    <div class="counter">Getrokken getallen: <span id="count-value">0</span></div>
-    <button id="reset-btn" onclick="resetBoard()">Reset Bord</button>
+    <div class="counter">Getrokken: <span id="count-value">0</span> / 75</div>
+    
+    <div style="color: #bbb; font-size: 0.85rem; text-align: center;">
+        <b>Pijltjes</b> = Navigeren | <b>Enter</b> = Markeren | <b>F</b> = Full-screen
+    </div>
+
+    <div class="button-group">
+        <button id="fullscreen-btn" class="admin-btn" onclick="toggleFullScreen()">Volledig Scherm</button>
+        <button id="reset-btn" class="admin-btn" onclick="resetBoard()">Reset Bord</button>
+    </div>
 </div>
 
 <script>
@@ -125,11 +134,13 @@
 
     let lastClickedButton = null;
     let drawnCount = 0;
+    let buttonsGrid = [];
 
-    // Functie om het bord op te bouwen
     function createBoard() {
         board.innerHTML = '';
-        letters.forEach((letter, index) => {
+        buttonsGrid = [];
+        
+        letters.forEach((letter, rIndex) => {
             const row = document.createElement('div');
             row.className = 'bingo-row';
 
@@ -138,49 +149,98 @@
             letterDiv.innerText = letter;
             row.appendChild(letterDiv);
 
-            const [start, end] = ranges[index];
+            const [start, end] = ranges[rIndex];
+            const currentRowButtons = [];
+
             for (let i = start; i <= end; i++) {
                 const btn = document.createElement('button');
                 btn.className = 'number-btn';
                 btn.innerText = i;
-                btn.onclick = () => toggleNumber(btn);
+                
+                btn.addEventListener('click', () => {
+                    toggleNumber(btn);
+                    btn.focus();
+                });
+
                 row.appendChild(btn);
+                currentRowButtons.push(btn);
             }
+            buttonsGrid.push(currentRowButtons);
             board.appendChild(row);
         });
+
+        setTimeout(() => buttonsGrid[0][0].focus(), 100);
     }
 
     function toggleNumber(btn) {
-        // Voorkom dubbel tellen als een getal al gemarkeerd is
-        if (btn.classList.contains('active-now') || btn.classList.contains('active-past')) {
-            return;
-        }
+        if (btn.classList.contains('active-now') || btn.classList.contains('active-past')) return;
 
-        // 1. Maak de vorige knop geel
         if (lastClickedButton) {
             lastClickedButton.classList.remove('active-now');
             lastClickedButton.classList.add('active-past');
         }
 
-        // 2. Maak huidige knop oranje
         btn.classList.add('active-now');
         lastClickedButton = btn;
-
-        // 3. Update teller
         drawnCount++;
         countDisplay.innerText = drawnCount;
     }
 
-    function resetBoard() {
-        if (confirm("Weet je zeker dat je het bord wilt leegmaken?")) {
-            drawnCount = 0;
-            countDisplay.innerText = "0";
-            lastClickedButton = null;
-            createBoard(); // Herbouw het bord
+    // Volledig scherm logica
+    function toggleFullScreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                alert(`Fout bij inschakelen full-screen: ${err.message}`);
+            });
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
         }
     }
 
-    // Initialisatie
+    // Toetsenbord logica
+    document.addEventListener('keydown', (e) => {
+        // Fullscreen sneltoets 'F'
+        if (e.key.toLowerCase() === 'f') {
+            toggleFullScreen();
+            return;
+        }
+
+        const active = document.activeElement;
+        let r = -1, c = -1;
+
+        for(let i=0; i<5; i++) {
+            let j = buttonsGrid[i].indexOf(active);
+            if(j !== -1) { r = i; c = j; break; }
+        }
+
+        if(r === -1 && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) {
+            if(lastClickedButton) lastClickedButton.focus();
+            else buttonsGrid[0][0].focus();
+            return;
+        }
+
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
+
+        switch(e.key) {
+            case 'ArrowUp':    if(r > 0) buttonsGrid[r-1][c].focus(); break;
+            case 'ArrowDown':  if(r < 4) buttonsGrid[r+1][c].focus(); break;
+            case 'ArrowLeft':  if(c > 0) buttonsGrid[r][c-1].focus(); break;
+            case 'ArrowRight': if(c < 14) buttonsGrid[r][c+1].focus(); break;
+            case 'Enter':      toggleNumber(active); break;
+        }
+    });
+
+    function resetBoard() {
+        if (confirm("Hele bord wissen?")) {
+            drawnCount = 0;
+            countDisplay.innerText = "0";
+            lastClickedButton = null;
+            createBoard();
+        }
+    }
+
     createBoard();
 </script>
 
